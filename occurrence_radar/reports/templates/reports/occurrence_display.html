@@ -5,26 +5,41 @@
 
 {% block content %}
 
-<!-- Page heading -->
 <h3 class="text-center mb-3">Reports Map</h3>
 
-<!-- Map container -->
+<!-- Controls -->
+<div class="d-flex justify-content-center gap-3 mb-3">
+    <select id="modeSelect" class="form-select w-auto">
+        <option value="markers">Colored markers</option>
+        <option value="heat">Heatmap (time-decayed)</option>
+    </select>
+
+    <select id="typeSelect" class="form-select w-auto">
+        <option value="all">All types</option>
+    </select>
+</div>
+
+<!-- Map -->
 <div id="map" style="height: 85vh; width: 100%; border-radius: 10px;"></div>
 
-<!-- Leaflet CSS -->
+<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+<!-- Heatmap plugin -->
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
 <script>
-    // Parse Django JSON safely
+    // ----------------------------
+    // Data from Django
+    // ----------------------------
     const reports = JSON.parse('{{ reports_json|escapejs }}');
 
-    // Init map
+    // ----------------------------
+    // Map init
+    // ----------------------------
     const map = L.map('map').setView([50, 10], 4);
 
-    // Tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap contributors',
@@ -32,22 +47,128 @@
         referrerPolicy: 'origin'
     }).addTo(map);
 
-    // Markers
-    const markers = [];
+    // ----------------------------
+    // Color mapping
+    // ----------------------------
+    const typeColors = {
+        fire: "red",
+        accident: "orange",
+        crime: "purple",
+        default: "blue"
+    };
 
-    reports.forEach(r => {
-        const marker = L.marker([r.lat, r.lng])
-            .addTo(map)
-            .bindPopup(`<b>${r.type}</b><br>${r.time}`);
+    // ----------------------------
+    // Layers
+    // ----------------------------
+    let markerLayer = L.layerGroup().addTo(map);
+    let heatLayer = null;
 
-        markers.push(marker);
+    // ----------------------------
+    // Time decay (24h exponential)
+    // ----------------------------
+    function getWeight(timeStr) {
+        const now = new Date();
+        const t = new Date(timeStr);
+        const hours = (now - t) / (1000 * 60 * 60);
+
+        const decayHours = 24;
+        return Math.exp(-hours / decayHours);
+    }
+
+    // ----------------------------
+    // Marker rendering
+    // ----------------------------
+    function renderMarkers(data, selectedType = "all") {
+        markerLayer.clearLayers();
+
+        data.forEach(r => {
+            if (selectedType !== "all" && r.type !== selectedType) return;
+
+            const color = typeColors[r.type] || typeColors.default;
+
+            const icon = L.divIcon({
+                className: "",
+                html: `<div style="
+                    background:${color};
+                    width:12px;
+                    height:12px;
+                    border-radius:50%;
+                    border:2px solid white;
+                "></div>`
+            });
+
+            L.marker([r.lat, r.lng], { icon })
+                .bindPopup(`<b>${r.type}</b><br>${r.time}`)
+                .addTo(markerLayer);
+        });
+    }
+
+    // ----------------------------
+    // Heatmap rendering
+    // ----------------------------
+    function renderHeatmap(data, selectedType = "all") {
+        if (heatLayer) {
+            map.removeLayer(heatLayer);
+        }
+
+        const points = data
+            .filter(r => selectedType === "all" || r.type === selectedType)
+            .map(r => [r.lat, r.lng, getWeight(r.time)]);
+
+        heatLayer = L.heatLayer(points, {
+            radius: 25,
+            blur: 18,
+            maxZoom: 10
+        }).addTo(map);
+    }
+
+    // ----------------------------
+    // Build type filter
+    // ----------------------------
+    const types = [...new Set(reports.map(r => r.type))];
+    const typeSelect = document.getElementById("typeSelect");
+
+    types.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = t;
+        typeSelect.appendChild(opt);
     });
 
-    // Auto zoom
-    if (markers.length > 0) {
-        const group = L.featureGroup(markers);
+    // ----------------------------
+    // Render controller
+    // ----------------------------
+    function render() {
+        const mode = document.getElementById("modeSelect").value;
+        const type = document.getElementById("typeSelect").value;
+
+        markerLayer.clearLayers();
+        if (heatLayer) map.removeLayer(heatLayer);
+
+        if (mode === "markers") {
+            renderMarkers(reports, type);
+        } else {
+            renderHeatmap(reports, type);
+        }
+    }
+
+    // ----------------------------
+    // Events
+    // ----------------------------
+    document.getElementById("modeSelect").addEventListener("change", render);
+    document.getElementById("typeSelect").addEventListener("change", render);
+
+    // ----------------------------
+    // Fit bounds + initial render
+    // ----------------------------
+    if (reports.length > 0) {
+        const group = L.featureGroup(
+            reports.map(r => L.marker([r.lat, r.lng]))
+        );
         map.fitBounds(group.getBounds().pad(0.2));
     }
+
+    render();
 </script>
 
 {% endblock %}
