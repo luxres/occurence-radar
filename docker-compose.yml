@@ -5,10 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${container_name_app}
-    command: sh -c "uv run manage.py migrate && uv run manage.py runserver 0.0.0.0:8000"
+    container_name: ${CONTAINER_NAME_APP}
+    command: sh -c "uv run occurrence_radar/manage.py migrate && uv run occurrence_radar/manage.py runserver 0.0.0.0:8000"
     ports:
-      - "${port_app}:8000"
+      - "${PORT_APP}:8000"
     restart: unless-stopped
     pull_policy: build
     env_file:
