@@ -10,3 +10,5 @@ services:
     ports:
       - "${port_app}:8000"
     restart: unless-stopped
+    env_file:
+      stack.env
