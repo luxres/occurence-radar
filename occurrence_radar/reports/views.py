@@ -40,8 +40,8 @@ def occurrence_display(request):
         {
             "lat": float(r.latitude),
             "lng": float(r.longitude),
-            "type": r.event_type,
-            "type_display": r.get_event_type_display(),
+            "type": r.event_type.key,
+            "type_display": r.event_type.label,
             "time": r.timestamp.isoformat()
         }
         for r in reports
