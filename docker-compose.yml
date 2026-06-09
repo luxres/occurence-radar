@@ -8,5 +8,5 @@ services:
     container_name: ${container_name_app}
     command: uv run occurrence_radar/manage.py runserver 0.0.0.0:8000
     ports:
-      - "8000:8000"
+      - "${port_app}:8000"
     restart: unless-stopped
