@@ -102,13 +102,21 @@ function getWeight(timeStr) {
 const typeFiltersContainer =
     document.getElementById("typeFilters");
 
-const typeMap = {};
+const selectedTypes = new Set();
 
-reports.forEach(r => {
-    typeMap[r.type] = r.type_display;
-});
+const eventTypes = [
+    {% for t in event_types %}
+    {
+        key: "{{ t.key }}",
+        label: "{{ t.label }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
 
-Object.entries(typeMap).forEach(([type,name]) => {
+// Render checkboxes
+eventTypes.forEach(t => {
+
+    selectedTypes.add(t.key);
 
     const div = document.createElement("div");
 
@@ -117,13 +125,14 @@ Object.entries(typeMap).forEach(([type,name]) => {
             <input
                 class="form-check-input type-checkbox"
                 type="checkbox"
-                value="${type}"
-                id="type-${type}"
-                checked>
+                value="${t.key}"
+                id="type-${t.key}"
+                checked
+            >
             <label
                 class="form-check-label"
-                for="type-${type}">
-                ${name}
+                for="type-${t.key}">
+                ${t.label}
             </label>
         </div>
     `;

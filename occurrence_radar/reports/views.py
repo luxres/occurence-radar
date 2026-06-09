@@ -2,13 +2,16 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .forms import ReportForm
-from .models import OccurrenceModel
+from .models import OccurrenceModel, EventType
 import json
 
 from django.shortcuts import render
 
 def occurrence_report(request):
-    return render(request, "reports/occurrence_report.html")
+    event_types = EventType.objects.all()
+    return render(request, "reports/occurrence_report.html", {
+        "event_types": event_types
+    })
 
 def report_occurrence_api(request):
     if request.method == "POST":
@@ -31,6 +34,7 @@ def report_occurrence_api(request):
 
 def occurrence_display(request):
     reports = OccurrenceModel.objects.all()
+    event_types = EventType.objects.all()
 
     data = [
         {
@@ -44,7 +48,8 @@ def occurrence_display(request):
     ]
 
     return render(request, "reports/occurrence_display.html", {
-        "reports_json": json.dumps(data)
+        "reports_json": json.dumps(data),
+        "event_types": event_types
     })
 
 def about(request):
