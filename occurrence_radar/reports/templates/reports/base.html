@@ -48,12 +48,35 @@
             padding: 12px 20px;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
             gap: 10px;
         }
 
         .logo {
             width: 32px;
             height: 32px;
+        }
+
+        /* GitHub button */
+        .github-btn {
+            background: #24292f;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 14px;
+            border: 1px solid #3b3b3b;
+            transition: 0.2s;
+        }
+
+        .github-btn:hover {
+            background: #2f363d;
+            color: white;
         }
     </style>
 </head>
@@ -64,6 +87,7 @@
 <div class="sidebar">
     <a href="{% url 'occurrence_display' %}">🗺 Map</a>
     <a href="{% url 'occurrence_report' %}">📝 Report</a>
+    <a href="{% url 'about' %}">ℹ️ About</a>
 </div>
 
 <!-- Main content -->
@@ -71,13 +95,40 @@
 
     <!-- Top header -->
     <div class="topbar mb-4">
-        <img src="{% static 'images/placeholder_logo.png' %}" class="logo" alt="Logo">
-        <h5 class="m-0">Occurence Radar</h5>
+
+        <div class="topbar-left">
+            <img src="{% static 'images/placeholder_logo.png' %}" class="logo" alt="Logo">
+            <h5 class="m-0">Occurence Radar</h5>
+        </div>
+
+        <a class="github-btn"
+           href="https://github.com/luxres/occurence-radar"
+           target="_blank">
+            ⭐ Fork me on GitHub
+        </a>
+
     </div>
 
     <!-- Page content -->
     {% block content %}
     {% endblock %}
+
+    <!-- Footer -->
+    <footer class="mt-4 py-3 border-top text-muted">
+        <div class="d-flex justify-content-center">
+
+            <small>
+                <a href="{% url 'imprint' %}" class="text-muted text-decoration-none me-3">
+                    Impressum
+                </a>
+
+                <a href="{% url 'privacy' %}" class="text-muted text-decoration-none">
+                    Privacy Policy
+                </a>
+            </small>
+
+        </div>
+    </footer>
 
 </div>
 

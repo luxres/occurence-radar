@@ -7,168 +7,449 @@
 
 <h3 class="text-center mb-3">Reports Map</h3>
 
-<!-- Controls -->
-<div class="d-flex justify-content-center gap-3 mb-3">
-    <select id="modeSelect" class="form-select w-auto">
-        <option value="markers">Colored markers</option>
-        <option value="heat">Heatmap (time-decayed)</option>
-    </select>
+<!-- Control Center -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-start">
 
-    <select id="typeSelect" class="form-select w-auto">
-        <option value="all">All types</option>
-    </select>
+            <!-- Display Mode -->
+            <div class="col-lg-2">
+                <label class="form-label fw-bold">Display Mode</label>
+                <select id="modeSelect" class="form-select">
+                    <option value="markers">Colored Markers</option>
+                    <option value="heat">Heatmap</option>
+                </select>
+            </div>
+
+            <!-- Time Filter -->
+            <div class="col-lg-2">
+                <label class="form-label fw-bold">Time Period</label>
+                <select id="timeFilter" class="form-select">
+                    <option value="1">Last Hour</option>
+                    <option value="2">Last 2 Hours</option>
+                    <option value="5">Last 5 Hours</option>
+                    <option value="12">Last 12 Hours</option>
+                    <option value="24" selected>Last 24 Hours</option>
+                    <option value="168">Last 7 Days</option>
+                    <option value="672">Last 4 Weeks</option>
+                </select>
+            </div>
+
+            <!-- Type Filters -->
+            <div class="col-lg-3">
+                <label class="form-label fw-bold">Report Types</label>
+                <div id="typeFilters" class="d-flex flex-wrap gap-3">
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="col-lg-5">
+                <label class="form-label fw-bold">Reports Over Time</label>
+                <div style="height:120px;">
+                    <canvas id="timelineChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+    </div>
 </div>
 
 <!-- Map -->
-<div id="map" style="height: 85vh; width: 100%; border-radius: 10px;"></div>
+<div id="map" style="height:75vh;width:100%;border-radius:10px;"></div>
 
-<!-- Leaflet -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- Heatmap plugin -->
 <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // ----------------------------
-    // Data from Django
-    // ----------------------------
-    const reports = JSON.parse('{{ reports_json|escapejs }}');
 
-    // ----------------------------
-    // Map init
-    // ----------------------------
-    const map = L.map('map').setView([50, 10], 4);
+const reports = JSON.parse('{{ reports_json|escapejs }}');
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
+const map = L.map('map').setView([50,10],4);
+
+L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {
+        maxZoom:19,
         attribution: '&copy; OpenStreetMap contributors',
         crossOrigin: true,
         referrerPolicy: 'origin'
-    }).addTo(map);
-
-    // ----------------------------
-    // Color mapping
-    // ----------------------------
-    const typeColors = {
-        fire: "red",
-        accident: "orange",
-        crime: "purple",
-        default: "blue"
-    };
-
-    // ----------------------------
-    // Layers
-    // ----------------------------
-    let markerLayer = L.layerGroup().addTo(map);
-    let heatLayer = null;
-
-    // ----------------------------
-    // Time decay (24h exponential)
-    // ----------------------------
-    function getWeight(timeStr) {
-        const now = new Date();
-        const t = new Date(timeStr);
-        const hours = (now - t) / (1000 * 60 * 60);
-
-        const decayHours = 24;
-        return Math.exp(-hours / decayHours);
     }
+).addTo(map);
 
-    // ----------------------------
-    // Marker rendering
-    // ----------------------------
-    function renderMarkers(data, selectedType = "all") {
-        markerLayer.clearLayers();
+const typeColors = {
+    paper_check:"#dc3545",
+    default:"#0d6efd"
+};
 
-        data.forEach(r => {
-            if (selectedType !== "all" && r.type !== selectedType) return;
+let markerLayer = L.layerGroup().addTo(map);
+let heatLayer = null;
 
-            const color = typeColors[r.type] || typeColors.default;
+function getWeight(timeStr) {
 
-            const icon = L.divIcon({
-                className: "",
-                html: `<div style="
-                    background:${color};
-                    width:12px;
-                    height:12px;
+    const now = new Date();
+    const t = new Date(timeStr);
+
+    const ageHours =
+        (now - t) / (1000 * 60 * 60);
+
+    return Math.exp(-ageHours / 24);
+}
+
+const typeFiltersContainer =
+    document.getElementById("typeFilters");
+
+const typeMap = {};
+
+reports.forEach(r => {
+    typeMap[r.type] = r.type_display;
+});
+
+Object.entries(typeMap).forEach(([type,name]) => {
+
+    const div = document.createElement("div");
+
+    div.innerHTML = `
+        <div class="form-check">
+            <input
+                class="form-check-input type-checkbox"
+                type="checkbox"
+                value="${type}"
+                id="type-${type}"
+                checked>
+            <label
+                class="form-check-label"
+                for="type-${type}">
+                ${name}
+            </label>
+        </div>
+    `;
+
+    typeFiltersContainer.appendChild(div);
+});
+
+function getSelectedTypes() {
+
+    return [
+        ...document.querySelectorAll(
+            ".type-checkbox:checked"
+        )
+    ].map(cb => cb.value);
+}
+
+function getSelectedHours() {
+
+    return parseInt(
+        document.getElementById(
+            "timeFilter"
+        ).value
+    );
+}
+
+function getFilteredReports() {
+
+    const selectedTypes =
+        getSelectedTypes();
+
+    const hours =
+        getSelectedHours();
+
+    const cutoff =
+        Date.now() -
+        hours * 60 * 60 * 1000;
+
+    return reports.filter(r => {
+
+        const matchesType =
+            selectedTypes.length === 0 ||
+            selectedTypes.includes(r.type);
+
+        const matchesTime =
+            new Date(r.time).getTime()
+            >= cutoff;
+
+        return matchesType &&
+               matchesTime;
+    });
+}
+
+function renderMarkers(data) {
+
+    markerLayer.clearLayers();
+
+    data.forEach(r => {
+
+        const color =
+            typeColors[r.type] ||
+            typeColors.default;
+
+        const icon = L.divIcon({
+            className:"",
+            html:`
+                <div style="
+                    width:14px;
+                    height:14px;
                     border-radius:50%;
+                    background:${color};
                     border:2px solid white;
-                "></div>`
-            });
-
-            L.marker([r.lat, r.lng], { icon })
-                .bindPopup(`<b>${r.type}</b><br>${r.time}`)
-                .addTo(markerLayer);
+                    box-shadow:0 0 4px rgba(0,0,0,.3);
+                "></div>
+            `
         });
+
+        L.marker(
+            [r.lat,r.lng],
+            {icon}
+        )
+        .bindPopup(`
+            <b>${r.type_display}</b><br>
+            ${new Date(r.time)
+                .toLocaleString()}
+        `)
+        .addTo(markerLayer);
+    });
+}
+
+function renderHeatmap(data) {
+
+    if (heatLayer) {
+        map.removeLayer(heatLayer);
     }
 
-    // ----------------------------
-    // Heatmap rendering
-    // ----------------------------
-    function renderHeatmap(data, selectedType = "all") {
-        if (heatLayer) {
-            map.removeLayer(heatLayer);
+    const points = data.map(r => [
+        r.lat,
+        r.lng,
+        getWeight(r.time)
+    ]);
+
+    heatLayer = L.heatLayer(
+        points,
+        {
+            radius:25,
+            blur:18,
+            maxZoom:10
         }
+    );
 
-        const points = data
-            .filter(r => selectedType === "all" || r.type === selectedType)
-            .map(r => [r.lat, r.lng, getWeight(r.time)]);
+    heatLayer.addTo(map);
+}
 
-        heatLayer = L.heatLayer(points, {
-            radius: 25,
-            blur: 18,
-            maxZoom: 10
-        }).addTo(map);
+const timelineChart = new Chart(
+    document
+        .getElementById("timelineChart")
+        .getContext("2d"),
+    {
+        type:"line",
+        data:{
+            labels:[],
+            datasets:[{
+                data:[],
+                borderColor:"#0d6efd",
+                backgroundColor:
+                    "rgba(13,110,253,0.15)",
+                fill:true,
+                pointRadius:0,
+                tension:0.3
+            }]
+        },
+        options:{
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{
+                legend:{
+                    display:false
+                }
+            },
+            scales:{
+                y:{
+                    beginAtZero:true,
+                    ticks:{
+                        precision:0
+                    }
+                }
+            }
+        }
+    }
+);
+
+function updateTimeline(data) {
+
+    if (!data.length) {
+
+        timelineChart.data.labels = [];
+        timelineChart.data.datasets[0].data = [];
+        timelineChart.update();
+
+        return;
     }
 
-    // ----------------------------
-    // Build type filter
-    // ----------------------------
-    const types = [...new Set(reports.map(r => r.type))];
-    const typeSelect = document.getElementById("typeSelect");
+    const hours =
+        getSelectedHours();
 
-    types.forEach(t => {
-        const opt = document.createElement("option");
-        opt.value = t;
-        opt.textContent = t;
-        typeSelect.appendChild(opt);
+    let bucketMs;
+    let labelFormat;
+
+    if (hours <= 5) {
+
+        bucketMs =
+            15 * 60 * 1000;
+
+        labelFormat = {
+            hour:"2-digit",
+            minute:"2-digit"
+        };
+
+    } else if (hours <= 24) {
+
+        bucketMs =
+            60 * 60 * 1000;
+
+        labelFormat = {
+            hour:"2-digit"
+        };
+
+    } else {
+
+        bucketMs =
+            24 * 60 * 60 * 1000;
+
+        labelFormat = {
+            month:"short",
+            day:"numeric"
+        };
+    }
+
+    const buckets = {};
+
+    const cutoff =
+        Date.now() -
+        hours * 60 * 60 * 1000;
+
+    data.forEach(r => {
+
+        const t =
+            new Date(r.time).getTime();
+
+        const bucket =
+            Math.floor(
+                t / bucketMs
+            ) * bucketMs;
+
+        buckets[bucket] =
+            (buckets[bucket] || 0) + 1;
     });
 
-    // ----------------------------
-    // Render controller
-    // ----------------------------
-    function render() {
-        const mode = document.getElementById("modeSelect").value;
-        const type = document.getElementById("typeSelect").value;
+    const labels = [];
+    const values = [];
 
-        markerLayer.clearLayers();
-        if (heatLayer) map.removeLayer(heatLayer);
+    for (
+        let t =
+            Math.floor(
+                cutoff / bucketMs
+            ) * bucketMs;
+        t <= Date.now();
+        t += bucketMs
+    ) {
 
-        if (mode === "markers") {
-            renderMarkers(reports, type);
-        } else {
-            renderHeatmap(reports, type);
+        labels.push(
+            new Date(t)
+                .toLocaleString(
+                    [],
+                    labelFormat
+                )
+        );
+
+        values.push(
+            buckets[t] || 0
+        );
+    }
+
+    timelineChart.data.labels =
+        labels;
+
+    timelineChart.data.datasets[0].data =
+        values;
+
+    timelineChart.update();
+}
+
+function fitToReports(data) {
+
+    if (!data.length)
+        return;
+
+    const bounds = L.latLngBounds(
+        data.map(r => [
+            r.lat,
+            r.lng
+        ])
+    );
+
+    map.fitBounds(
+        bounds.pad(0.2)
+    );
+}
+
+function render() {
+
+    const mode =
+        document.getElementById(
+            "modeSelect"
+        ).value;
+
+    const filtered =
+        getFilteredReports();
+
+    markerLayer.clearLayers();
+
+    if (heatLayer) {
+        map.removeLayer(heatLayer);
+    }
+
+    if (mode === "markers") {
+        renderMarkers(filtered);
+    } else {
+        renderHeatmap(filtered);
+    }
+
+    updateTimeline(filtered);
+
+    fitToReports(filtered);
+}
+
+document
+    .getElementById("modeSelect")
+    .addEventListener(
+        "change",
+        render
+    );
+
+document
+    .getElementById("timeFilter")
+    .addEventListener(
+        "change",
+        render
+    );
+
+document.addEventListener(
+    "change",
+    e => {
+
+        if (
+            e.target.classList.contains(
+                "type-checkbox"
+            )
+        ) {
+            render();
         }
     }
+);
 
-    // ----------------------------
-    // Events
-    // ----------------------------
-    document.getElementById("modeSelect").addEventListener("change", render);
-    document.getElementById("typeSelect").addEventListener("change", render);
+render();
 
-    // ----------------------------
-    // Fit bounds + initial render
-    // ----------------------------
-    if (reports.length > 0) {
-        const group = L.featureGroup(
-            reports.map(r => L.marker([r.lat, r.lng]))
-        );
-        map.fitBounds(group.getBounds().pad(0.2));
-    }
-
-    render();
 </script>
 
 {% endblock %}

@@ -37,7 +37,8 @@ def occurrence_display(request):
             "lat": float(r.latitude),
             "lng": float(r.longitude),
             "type": r.event_type,
-            "time": r.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "type_display": r.get_event_type_display(),
+            "time": r.timestamp.isoformat()
         }
         for r in reports
     ]
@@ -45,3 +46,12 @@ def occurrence_display(request):
     return render(request, "reports/occurrence_display.html", {
         "reports_json": json.dumps(data)
     })
+
+def about(request):
+    return JsonResponse({"success": True}, status=200)
+
+def imprint(request):
+    return JsonResponse({"success": True}, status=200)
+
+def privacy(request):
+    return JsonResponse({"success": True}, status=200)
